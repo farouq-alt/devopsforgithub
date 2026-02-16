@@ -1,16 +1,17 @@
 import { useState, useEffect } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
-import { logout } from '../store/appSlice'
+import { logout, deductBalance } from '../store/appSlice'
 import { addToCart, updateCartQuantity, placeOrder, cancelOrder, addToFavorites, removeFromFavorites } from '../store/ordersSlice'
 import { incrementOrderCount } from '../store/shopsSlice'
 import { validateOrderMinimum, estimatePreparationTime } from '../utils/businessLogic'
+import { generatePickupCode } from '../utils/codes'
 import BottomNav from '../components/BottomNav'
 import DeliveryForm from '../components/DeliveryForm'
 import DiscountCode from '../components/DiscountCode'
 
 function StudentDash() {
   const dispatch = useDispatch()
-  const { userName, user } = useSelector(state => state.app)
+  const { userName, user, balance } = useSelector(state => state.app)
   const orderingEnabled = useSelector(state => state.app.orderingEnabled)
   const shops = useSelector(state => state.shops.shops)
   const cart = useSelector(state => state.orders.cart)
@@ -88,9 +89,24 @@ function StudentDash() {
     // Calculate delivery fee (simplified - 5 MAD flat rate)
     const deliveryFee = 5
     
+    // Calculate total
+    const orderTotal = subtotal + shop.serviceFee + deliveryFee - (appliedDiscount?.amount || 0)
+
+    // Check balance
+    if (balance < orderTotal) {
+      alert(`Insufficient balance! You need ${orderTotal} MAD but have ${balance} MAD. Please contact admin to credit your account.`)
+      return
+    }
+    
     // Calculate estimated time
     const estimatedTime = estimatePreparationTime(cart)
     
+    // Generate pickup code
+    const pickupCode = generatePickupCode()
+
+    // Deduct balance
+    dispatch(deductBalance({ amount: orderTotal, orderId: pickupCode }))
+
     dispatch(placeOrder({
       items: cart,
       shopId: selectedShop,
@@ -100,7 +116,9 @@ function StudentDash() {
       deliveryFee,
       estimatedTime,
       userId: user,
-      deliveryLocation
+      deliveryLocation,
+      pickupCode,
+      balance
     }))
     dispatch(incrementOrderCount(selectedShop))
     setSelectedShop(null)
@@ -136,7 +154,7 @@ function StudentDash() {
       <header className="dashboard-header">
         <div>
           <h1>Good morning, {userName}</h1>
-          <p className="header-subtitle">Break countdown</p>
+          <p className="header-subtitle">Balance: {balance} MAD</p>
         </div>
         <button className="logout-btn" onClick={() => dispatch(logout())}>Logout</button>
       </header>
@@ -299,33 +317,42 @@ function StudentDash() {
               <div className="cart-summary">
                 <div className="summary-row">
                   <span>Subtotal</span>
-                  <span>{cartTotal}</span>
+                  <span>{cartTotal} MAD</span>
                 </div>
                 <div className="summary-row">
                   <span>Service fee</span>
-                  <span>{serviceFee}</span>
+                  <span>{serviceFee} MAD</span>
                 </div>
                 <div className="summary-row">
                   <span>Delivery fee</span>
-                  <span>5</span>
+                  <span>5 MAD</span>
                 </div>
                 {appliedDiscount?.valid && (
                   <div className="summary-row" style={{ color: 'var(--forest-green)' }}>
                     <span>Discount</span>
-                    <span>-{appliedDiscount.amount}</span>
+                    <span>-{appliedDiscount.amount} MAD</span>
                   </div>
                 )}
                 <div className="summary-row total">
                   <span>Total</span>
-                  <span>{cartTotal + serviceFee + 5 - (appliedDiscount?.amount || 0)}</span>
+                  <span>{cartTotal + serviceFee + 5 - (appliedDiscount?.amount || 0)} MAD</span>
+                </div>
+                <div className="summary-row" style={{ marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '1px solid #ddd' }}>
+                  <span>Your Balance</span>
+                  <span style={{ fontWeight: 'bold', color: balance >= (cartTotal + serviceFee + 5 - (appliedDiscount?.amount || 0)) ? 'var(--forest-green)' : 'var(--burgundy)' }}>
+                    {balance} MAD
+                  </span>
                 </div>
               </div>
               <button 
                 className="place-order-btn"
                 onClick={handlePlaceOrder}
-                disabled={!orderingEnabled || !deliveryLocation?.building}
+                disabled={!orderingEnabled || !deliveryLocation?.building || balance < (cartTotal + serviceFee + 5 - (appliedDiscount?.amount || 0))}
               >
-                {!orderingEnabled ? 'Ordering Closed' : !deliveryLocation?.building ? 'Add Delivery Details' : 'Place Order'}
+                {!orderingEnabled ? 'Ordering Closed' : 
+                 !deliveryLocation?.building ? 'Add Delivery Details' : 
+                 balance < (cartTotal + serviceFee + 5 - (appliedDiscount?.amount || 0)) ? 'Insufficient Balance' :
+                 'Place Order'}
               </button>
             </>
           )}
@@ -347,9 +374,29 @@ function StudentDash() {
                       {order.status}
                     </span>
                   </div>
+
+                  {order.pickupCode && order.pickupCode !== 'N/A' && (
+                    <div style={{ 
+                      background: 'var(--gold)', 
+                      color: '#000', 
+                      padding: '1rem', 
+                      borderRadius: '8px', 
+                      textAlign: 'center',
+                      margin: '1rem 0',
+                      fontWeight: 'bold'
+                    }}>
+                      <div style={{ fontSize: '0.85rem', marginBottom: '0.25rem' }}>PICKUP CODE</div>
+                      <div style={{ fontSize: '1.8rem', letterSpacing: '0.2em' }}>{order.pickupCode}</div>
+                      <div style={{ fontSize: '0.75rem', marginTop: '0.25rem' }}>Show this to the runner</div>
+                    </div>
+                  )}
+
                   <div className="order-progress">
-                    <div className={`step ${['Queued', 'Ready', 'Picked Up', 'Delivered'].includes(order.status) ? 'done' : ''}`}>
+                    <div className={`step ${['Queued', 'Preparing', 'Ready', 'Picked Up', 'Delivered'].includes(order.status) ? 'done' : ''}`}>
                       <span>Queued</span>
+                    </div>
+                    <div className={`step ${['Preparing', 'Ready', 'Picked Up', 'Delivered'].includes(order.status) ? 'done' : ''}`}>
+                      <span>Preparing</span>
                     </div>
                     <div className={`step ${['Ready', 'Picked Up', 'Delivered'].includes(order.status) ? 'done' : ''}`}>
                       <span>Ready</span>

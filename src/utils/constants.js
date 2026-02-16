@@ -9,9 +9,11 @@ export const ROLES = {
 // Order statuses
 export const ORDER_STATUS = {
   QUEUED: 'Queued',
+  PREPARING: 'Preparing',
   READY: 'Ready',
   PICKED_UP: 'Picked Up',
   DELIVERED: 'Delivered',
+  NO_SHOW: 'No-show',
   CANCELLED: 'Cancelled'
 }
 
@@ -34,4 +36,17 @@ export const VALIDATION = {
   MAX_NAME_LENGTH: 50,
   MIN_ORDER_AMOUNT: 1,
   MAX_CART_ITEMS: 20
+}
+
+// Subscription pricing
+export const SUBSCRIPTION = {
+  MONTHLY_FEE: 150, // MAD
+  MIN_BALANCE: 0
+}
+
+// Break configuration
+export const BREAK_CONFIG = {
+  START_TIME: '12:00',
+  CUTOFF_TIME: '12:30',
+  END_TIME: '13:00'
 }

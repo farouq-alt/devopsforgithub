@@ -61,6 +61,16 @@ function ShopDash() {
     setBatchReady(true)
   }
 
+  const handleMarkPreparing = () => {
+    queuedOrders.forEach(order => {
+      dispatch(updateOrderStatus({ 
+        id: order.id, 
+        status: 'Preparing',
+        role: role
+      }))
+    })
+  }
+
   const handleToggleShop = () => {
     dispatch(toggleShopStatus({ 
       shopId: myShop.id,
@@ -119,13 +129,23 @@ function ShopDash() {
                 </div>
               ))}
             </div>
-            <button 
-              className="mark-ready-btn"
-              onClick={handleMarkReady}
-              disabled={batchReady}
-            >
-              {batchReady ? 'Batch Ready' : 'Mark Batch as Ready'}
-            </button>
+            <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
+              <button 
+                className="mark-ready-btn"
+                onClick={handleMarkPreparing}
+                style={{ flex: 1, background: 'var(--burgundy)' }}
+              >
+                Mark as Preparing
+              </button>
+              <button 
+                className="mark-ready-btn"
+                onClick={handleMarkReady}
+                disabled={batchReady}
+                style={{ flex: 1 }}
+              >
+                {batchReady ? 'Batch Ready' : 'Mark as Ready'}
+              </button>
+            </div>
           </>
         )}
       </div>

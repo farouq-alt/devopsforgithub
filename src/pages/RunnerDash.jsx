@@ -67,12 +67,38 @@ function RunnerDash() {
                       <h4>{order.shopName}</h4>
                       <span className="status-badge ready">Ready</span>
                     </div>
+                    
+                    {order.pickupCode && order.pickupCode !== 'N/A' && (
+                      <div style={{ 
+                        background: 'var(--gold)', 
+                        color: '#000', 
+                        padding: '0.75rem', 
+                        borderRadius: '6px', 
+                        textAlign: 'center',
+                        margin: '0.75rem 0',
+                        fontWeight: 'bold'
+                      }}>
+                        <div style={{ fontSize: '0.75rem' }}>PICKUP CODE</div>
+                        <div style={{ fontSize: '1.5rem', letterSpacing: '0.2em' }}>{order.pickupCode}</div>
+                      </div>
+                    )}
+
                     <div className="order-items">
                       {order.items.map((item, idx) => (
                         <p key={idx}>{item.quantity}x {item.name}</p>
                       ))}
                     </div>
-                    <p className="order-total">Total: {order.total} MAD</p>
+                    
+                    {order.deliveryLocation && (
+                      <div style={{ marginTop: '0.5rem', padding: '0.5rem', background: '#f5f5f5', borderRadius: '4px', fontSize: '0.9rem' }}>
+                        <strong>Deliver to:</strong>
+                        <p>{order.deliveryLocation.building}</p>
+                        {(order.deliveryLocation.floor || order.deliveryLocation.room) && (
+                          <p>Floor {order.deliveryLocation.floor}, Room {order.deliveryLocation.room}</p>
+                        )}
+                      </div>
+                    )}
+
                     <button 
                       className="action-btn pickup"
                       onClick={() => handlePickup(order.id)}
@@ -99,12 +125,38 @@ function RunnerDash() {
                       <h4>{order.shopName}</h4>
                       <span className="status-badge picked-up">In Transit</span>
                     </div>
+
+                    {order.pickupCode && order.pickupCode !== 'N/A' && (
+                      <div style={{ 
+                        background: '#e0e0e0', 
+                        color: '#000', 
+                        padding: '0.5rem', 
+                        borderRadius: '4px', 
+                        textAlign: 'center',
+                        margin: '0.5rem 0',
+                        fontSize: '0.9rem'
+                      }}>
+                        Code: {order.pickupCode}
+                      </div>
+                    )}
+
                     <div className="order-items">
                       {order.items.map((item, idx) => (
                         <p key={idx}>{item.quantity}x {item.name}</p>
                       ))}
                     </div>
-                    <p className="order-total">Total: {order.total} MAD</p>
+                    
+                    {order.deliveryLocation && (
+                      <div style={{ marginTop: '0.5rem', padding: '0.5rem', background: '#f5f5f5', borderRadius: '4px', fontSize: '0.9rem' }}>
+                        <strong>Deliver to:</strong>
+                        <p>{order.deliveryLocation.building}</p>
+                        {(order.deliveryLocation.floor || order.deliveryLocation.room) && (
+                          <p>Floor {order.deliveryLocation.floor}, Room {order.deliveryLocation.room}</p>
+                        )}
+                        {order.deliveryNotes && <p style={{ fontStyle: 'italic', marginTop: '0.25rem' }}>Note: {order.deliveryNotes}</p>}
+                      </div>
+                    )}
+
                     <button 
                       className="action-btn deliver"
                       onClick={() => handleDeliver(order.id)}

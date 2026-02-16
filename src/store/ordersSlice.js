@@ -88,7 +88,7 @@ const ordersSlice = createSlice({
       state.appliedDiscount = action.payload
     },
     placeOrder: (state, action) => {
-      const { items, shopId, shopName, total, userId, deliveryLocation, deliveryFee, estimatedTime } = action.payload
+      const { items, shopId, shopName, total, userId, deliveryLocation, deliveryFee, estimatedTime, pickupCode, balance } = action.payload
       
       // Validate order
       if (!items || items.length === 0) {
@@ -98,6 +98,13 @@ const ordersSlice = createSlice({
       
       if (!shopId || !shopName || !total || !userId) {
         state.error = 'Invalid order data'
+        return
+      }
+
+      // Check balance
+      const orderTotal = total + (action.payload.serviceFee || 0) + (deliveryFee || 0) - (state.appliedDiscount?.amount || 0)
+      if (balance !== undefined && balance < orderTotal) {
+        state.error = 'Insufficient balance'
         return
       }
       
@@ -111,12 +118,13 @@ const ordersSlice = createSlice({
         serviceFee: action.payload.serviceFee || 0,
         deliveryFee: deliveryFee || 0,
         discount: state.appliedDiscount?.amount || 0,
-        total: total + (action.payload.serviceFee || 0) + (deliveryFee || 0) - (state.appliedDiscount?.amount || 0),
+        total: orderTotal,
         status: ORDER_STATUS.QUEUED,
         deliveryLocation: deliveryLocation || state.deliveryLocation,
         deliveryNotes: state.deliveryNotes,
         paymentMethod: state.paymentMethod,
         estimatedTime: estimatedTime || { min: 20, max: 30 },
+        pickupCode: pickupCode || 'N/A',
         timestamp: new Date().toISOString(),
         createdAt: Date.now(),
         statusHistory: [{
