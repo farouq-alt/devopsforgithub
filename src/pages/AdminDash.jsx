@@ -5,6 +5,7 @@ import { toggleShop } from '../store/shopsSlice'
 
 function AdminDash() {
   const dispatch = useDispatch()
+  const { role } = useSelector(state => state.app)
   const shops = useSelector(state => state.shops.shops)
   const orderingEnabled = useSelector(state => state.app.orderingEnabled)
   const [view, setView] = useState('shops')
@@ -12,18 +13,25 @@ function AdminDash() {
   const [cutoff, setCutoff] = useState('')
   const [fee, setFee] = useState('')
 
-  const handleSaveShop = (shopId) => {
+  const handleSaveShop = () => {
     // In a real app, this would update the shop
     setEditingShop(null)
     setCutoff('')
     setFee('')
   }
 
+  const handleToggleShop = (shopId) => {
+    dispatch(toggleShop({ 
+      shopId,
+      isAdmin: role === 'admin'
+    }))
+  }
+
   return (
     <div className="dashboard admin-dashboard">
       <header className="dashboard-header">
         <div>
-          <h1>⚙️ Admin Dashboard</h1>
+          <h1>Admin Dashboard</h1>
           <p className="header-subtitle">System management</p>
         </div>
         <button className="logout-btn" onClick={() => dispatch(logout())}>Logout</button>
@@ -34,7 +42,7 @@ function AdminDash() {
           className={`toggle-shop-btn ${orderingEnabled ? 'open' : 'closed'}`}
           onClick={() => dispatch(toggleOrdering())}
         >
-          {orderingEnabled ? '🟢 Ordering Open - Click to Close' : '🔴 Ordering Closed - Click to Open'}
+          {orderingEnabled ? 'Ordering Open - Click to Close' : 'Ordering Closed - Click to Open'}
         </button>
       </div>
 
@@ -63,9 +71,9 @@ function AdminDash() {
                   <h3>{shop.name}</h3>
                   <div className="shop-details">
                     <p><strong>Cutoff:</strong> {shop.cutoffTime}</p>
-                    <p><strong>Service Fee:</strong> ${shop.serviceFee}</p>
+                    <p><strong>Service Fee:</strong> {shop.serviceFee} MAD</p>
                     <p><strong>Max Orders:</strong> {shop.maxOrders}</p>
-                    <p><strong>Status:</strong> {shop.enabled ? '✓ Enabled' : '✗ Disabled'}</p>
+                    <p><strong>Status:</strong> {shop.enabled ? 'Enabled' : 'Disabled'}</p>
                   </div>
                   <div className="admin-actions">
                     <button 
@@ -76,7 +84,7 @@ function AdminDash() {
                     </button>
                     <button 
                       className={`action-btn ${shop.enabled ? 'disable' : 'enable'}`}
-                      onClick={() => dispatch(toggleShop(shop.id))}
+                      onClick={() => handleToggleShop(shop.id)}
                     >
                       {shop.enabled ? 'Disable' : 'Enable'}
                     </button>
@@ -98,7 +106,7 @@ function AdminDash() {
                       />
                       <button 
                         className="action-btn save"
-                        onClick={() => handleSaveShop(shop.id)}
+                        onClick={() => handleSaveShop()}
                       >
                         Save
                       </button>
@@ -122,7 +130,7 @@ function AdminDash() {
             <div className="settings-form">
               <div className="form-group">
                 <label>Global Service Fee</label>
-                <input type="number" placeholder="$" defaultValue="1" />
+                <input type="number" placeholder="MAD" defaultValue="1" />
               </div>
               <div className="form-group">
                 <label>Default Max Orders per Shop</label>

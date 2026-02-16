@@ -6,13 +6,14 @@ import { toggleShopStatus } from '../store/shopsSlice'
 
 function ShopDash() {
   const dispatch = useDispatch()
+  const { role } = useSelector(state => state.app)
   const allOrders = useSelector(state => state.orders.allOrders)
   const shops = useSelector(state => state.shops.shops)
-  const [cutoffTime, setCutoffTime] = useState('12:30')
+  const [cutoffTime] = useState('12:30')
   const [timeLeft, setTimeLeft] = useState(null)
   const [batchReady, setBatchReady] = useState(false)
 
-  // Assuming first shop for demo - in real app, would match to logged in shop owner
+  // Find shop owned by this user (in real app, match by ownerId)
   const myShop = shops[0]
 
   useEffect(() => {
@@ -44,20 +45,28 @@ function ShopDash() {
 
   const handleMarkReady = () => {
     queuedOrders.forEach(order => {
-      dispatch(updateOrderStatus({ id: order.id, status: 'Ready' }))
+      dispatch(updateOrderStatus({ 
+        id: order.id, 
+        status: 'Ready',
+        role: role
+      }))
     })
     setBatchReady(true)
   }
 
   const handleToggleShop = () => {
-    dispatch(toggleShopStatus(myShop.id))
+    dispatch(toggleShopStatus({ 
+      shopId: myShop.id,
+      ownerId: myShop.ownerId,
+      isAdmin: role === 'admin'
+    }))
   }
 
   return (
     <div className="dashboard shop-dashboard">
       <header className="dashboard-header">
         <div>
-          <h1>🏪 {myShop.name}</h1>
+          <h1>{myShop.name}</h1>
           <p className="header-subtitle">Manage your orders</p>
         </div>
         <button className="logout-btn" onClick={() => dispatch(logout())}>Logout</button>
@@ -68,7 +77,7 @@ function ShopDash() {
           className={`toggle-shop-btn ${myShop.status === 'open' ? 'open' : 'closed'}`}
           onClick={handleToggleShop}
         >
-          {myShop.status === 'open' ? '🟢 Shop Open - Click to Close' : '🔴 Shop Closed - Click to Open'}
+          {myShop.status === 'open' ? 'Shop Open - Click to Close' : 'Shop Closed - Click to Open'}
         </button>
       </div>
 
@@ -108,7 +117,7 @@ function ShopDash() {
               onClick={handleMarkReady}
               disabled={batchReady}
             >
-              {batchReady ? '✓ Batch Ready' : 'Mark Batch as Ready'}
+              {batchReady ? 'Batch Ready' : 'Mark Batch as Ready'}
             </button>
           </>
         )}
@@ -128,7 +137,7 @@ function ShopDash() {
                   <p key={idx}>{item.quantity}x {item.name}</p>
                 ))}
               </div>
-              <p className="order-total">Total: ${order.total}</p>
+              <p className="order-total">Total: {order.total} MAD</p>
             </div>
           ))}
         </div>

@@ -1,4 +1,5 @@
 import { useSelector } from 'react-redux'
+import { useAuth } from './hooks/useAuth'
 import './App.css'
 import Login from './pages/Login'
 import StudentDash from './pages/StudentDash'
@@ -7,7 +8,8 @@ import RunnerDash from './pages/RunnerDash'
 import AdminDash from './pages/AdminDash'
 
 function App() {
-  const { isLoggedIn, role } = useSelector(state => state.app)
+  const { isLoggedIn } = useAuth()
+  const { role } = useSelector(state => state.app)
 
   if (!isLoggedIn) {
     return <Login />

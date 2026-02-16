@@ -1,14 +1,13 @@
 import { useState, useEffect } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { logout } from '../store/appSlice'
-import { addToCart, removeFromCart, updateCartQuantity, placeOrder } from '../store/ordersSlice'
+import { addToCart, updateCartQuantity, placeOrder } from '../store/ordersSlice'
 import { incrementOrderCount } from '../store/shopsSlice'
 import BottomNav from '../components/BottomNav'
-import Timer from '../components/Timer'
 
 function StudentDash() {
   const dispatch = useDispatch()
-  const { userName } = useSelector(state => state.app)
+  const { userName, user } = useSelector(state => state.app)
   const orderingEnabled = useSelector(state => state.app.orderingEnabled)
   const shops = useSelector(state => state.shops.shops)
   const cart = useSelector(state => state.orders.cart)
@@ -16,9 +15,8 @@ function StudentDash() {
   
   const [view, setView] = useState('shops')
   const [selectedShop, setSelectedShop] = useState(null)
-  const [cutoffTime, setCutoffTime] = useState('12:30')
+  const [cutoffTime] = useState('12:30')
   const [timeLeft, setTimeLeft] = useState(null)
-  const [orderingClosed, setOrderingClosed] = useState(false)
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -29,10 +27,8 @@ function StudentDash() {
       
       const diff = cutoff - now
       if (diff <= 0) {
-        setOrderingClosed(true)
         setTimeLeft('Closed')
       } else {
-        setOrderingClosed(false)
         const mins = Math.floor(diff / 60000)
         const secs = Math.floor((diff % 60000) / 1000)
         setTimeLeft(`${mins}:${secs.toString().padStart(2, '0')}`)
@@ -57,13 +53,20 @@ function StudentDash() {
       return
     }
     
+    // Check if shop is at capacity
+    if (shop.currentOrders >= shop.maxOrders) {
+      alert('This shop is at full capacity!')
+      return
+    }
+    
     const total = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0)
     
     dispatch(placeOrder({
       items: cart,
       shopId: selectedShop,
       shopName: shop.name,
-      total: total + shop.serviceFee
+      total: total + shop.serviceFee,
+      userId: user
     }))
     dispatch(incrementOrderCount(selectedShop))
     setSelectedShop(null)
@@ -110,6 +113,7 @@ function StudentDash() {
                   className={`shop-card ${isSelected ? 'selected' : ''} ${isFull || isClosed ? 'full' : ''}`}
                   onClick={() => canSelect && setSelectedShop(shop.id)}
                 >
+                  {shop.image && <img src={shop.image} alt={shop.name} className="shop-image" />}
                   <div className="shop-header">
                     <h3>{shop.name}</h3>
                     <span className={`status-badge ${isFull ? 'full' : isClosed ? 'closed' : 'open'}`}>
@@ -118,7 +122,7 @@ function StudentDash() {
                   </div>
                   <div className="shop-info">
                     <p><strong>{shop.maxOrders - shop.currentOrders}</strong> spots left</p>
-                    <p>Service fee: ${shop.serviceFee}</p>
+                    <p>Service fee: {shop.serviceFee} MAD</p>
                     <p className="cutoff">Closes at {shop.cutoffTime}</p>
                   </div>
                   {isSelected && canSelect && (
@@ -140,17 +144,21 @@ function StudentDash() {
           <div className="menu-list">
             {shop.menu.map(item => (
               <div key={item.id} className="menu-item">
-                <div className="item-info">
-                  <h4>{item.name}</h4>
-                  <p className="price">${item.price}</p>
+                {item.image && <img src={item.image} alt={item.name} className="menu-item-image" />}
+                <div className="menu-item-content">
+                  <div className="item-info">
+                    <h4>{item.name}</h4>
+                    {item.description && <p className="item-description">{item.description}</p>}
+                    <p className="price">{item.price}</p>
+                  </div>
+                  <button 
+                    className="add-btn"
+                    onClick={() => dispatch(addToCart(item))}
+                    disabled={!orderingEnabled}
+                  >
+                    +
+                  </button>
                 </div>
-                <button 
-                  className="add-btn"
-                  onClick={() => dispatch(addToCart(item))}
-                  disabled={!orderingEnabled}
-                >
-                  +
-                </button>
               </div>
             ))}
           </div>
@@ -167,31 +175,34 @@ function StudentDash() {
               <div className="cart-items">
                 {cart.map(item => (
                   <div key={item.id} className="cart-item">
-                    <div className="item-details">
-                      <h4>{item.name}</h4>
-                      <p>${item.price} each</p>
+                    {item.image && <img src={item.image} alt={item.name} className="cart-item-image" />}
+                    <div className="cart-item-content">
+                      <div className="item-details">
+                        <h4>{item.name}</h4>
+                        <p>{item.price} MAD each</p>
+                      </div>
+                      <div className="quantity-control">
+                        <button onClick={() => dispatch(updateCartQuantity({ id: item.id, quantity: item.quantity - 1 }))}>−</button>
+                        <span>{item.quantity}</span>
+                        <button onClick={() => dispatch(updateCartQuantity({ id: item.id, quantity: item.quantity + 1 }))}>+</button>
+                      </div>
+                      <p className="subtotal">{item.price * item.quantity}</p>
                     </div>
-                    <div className="quantity-control">
-                      <button onClick={() => dispatch(updateCartQuantity({ id: item.id, quantity: item.quantity - 1 }))}>−</button>
-                      <span>{item.quantity}</span>
-                      <button onClick={() => dispatch(updateCartQuantity({ id: item.id, quantity: item.quantity + 1 }))}>+</button>
-                    </div>
-                    <p className="subtotal">${item.price * item.quantity}</p>
                   </div>
                 ))}
               </div>
               <div className="cart-summary">
                 <div className="summary-row">
                   <span>Subtotal</span>
-                  <span>${cartTotal}</span>
+                  <span>{cartTotal}</span>
                 </div>
                 <div className="summary-row">
                   <span>Service fee</span>
-                  <span>${serviceFee}</span>
+                  <span>{serviceFee}</span>
                 </div>
                 <div className="summary-row total">
                   <span>Total</span>
-                  <span>${cartTotal + serviceFee}</span>
+                  <span>{cartTotal + serviceFee}</span>
                 </div>
               </div>
               <button 
@@ -232,7 +243,7 @@ function StudentDash() {
                       <span>Delivered</span>
                     </div>
                   </div>
-                  <p className="order-total">Total: ${order.total}</p>
+                  <p className="order-total">Total: {order.total} MAD</p>
                 </div>
               ))}
             </div>

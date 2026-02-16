@@ -5,6 +5,7 @@ import { updateOrderStatus } from '../store/ordersSlice'
 
 function RunnerDash() {
   const dispatch = useDispatch()
+  const { role } = useSelector(state => state.app)
   const allOrders = useSelector(state => state.orders.allOrders)
   const [view, setView] = useState('pickup')
 
@@ -12,18 +13,26 @@ function RunnerDash() {
   const pickedUpOrders = allOrders.filter(o => o.status === 'Picked Up')
 
   const handlePickup = (orderId) => {
-    dispatch(updateOrderStatus({ id: orderId, status: 'Picked Up' }))
+    dispatch(updateOrderStatus({ 
+      id: orderId, 
+      status: 'Picked Up',
+      role: role
+    }))
   }
 
   const handleDeliver = (orderId) => {
-    dispatch(updateOrderStatus({ id: orderId, status: 'Delivered' }))
+    dispatch(updateOrderStatus({ 
+      id: orderId, 
+      status: 'Delivered',
+      role: role
+    }))
   }
 
   return (
     <div className="dashboard runner-dashboard">
       <header className="dashboard-header">
         <div>
-          <h1>🚴 Runner Dashboard</h1>
+          <h1>Runner Dashboard</h1>
           <p className="header-subtitle">Manage deliveries</p>
         </div>
         <button className="logout-btn" onClick={() => dispatch(logout())}>Logout</button>
@@ -63,7 +72,7 @@ function RunnerDash() {
                         <p key={idx}>{item.quantity}x {item.name}</p>
                       ))}
                     </div>
-                    <p className="order-total">Total: ${order.total}</p>
+                    <p className="order-total">Total: {order.total} MAD</p>
                     <button 
                       className="action-btn pickup"
                       onClick={() => handlePickup(order.id)}
@@ -95,7 +104,7 @@ function RunnerDash() {
                         <p key={idx}>{item.quantity}x {item.name}</p>
                       ))}
                     </div>
-                    <p className="order-total">Total: ${order.total}</p>
+                    <p className="order-total">Total: {order.total} MAD</p>
                     <button 
                       className="action-btn deliver"
                       onClick={() => handleDeliver(order.id)}
