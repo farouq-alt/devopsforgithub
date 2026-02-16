@@ -27,9 +27,16 @@ function ShopDash() {
       if (diff <= 0) {
         setTimeLeft('Closed')
       } else {
-        const mins = Math.floor(diff / 60000)
+        const totalMinutes = Math.floor(diff / 60000)
+        const hours = Math.floor(totalMinutes / 60)
+        const mins = totalMinutes % 60
         const secs = Math.floor((diff % 60000) / 1000)
-        setTimeLeft(`${mins}:${secs.toString().padStart(2, '0')}`)
+        
+        if (hours > 0) {
+          setTimeLeft(`${hours}h ${mins}m ${secs}s`)
+        } else {
+          setTimeLeft(`${mins}m ${secs}s`)
+        }
       }
     }, 1000)
     return () => clearInterval(timer)

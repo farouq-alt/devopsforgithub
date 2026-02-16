@@ -7,7 +7,14 @@ const ordersSlice = createSlice({
     cart: [],
     studentOrders: [],
     allOrders: [],
-    error: null
+    error: null,
+    deliveryLocation: null,
+    deliveryNotes: '',
+    paymentMethod: 'cash',
+    discountCode: '',
+    appliedDiscount: null,
+    favoriteItems: [],
+    orderHistory: []
   },
   reducers: {
     addToCart: (state, action) => {
@@ -26,7 +33,7 @@ const ordersSlice = createSlice({
         }
       } else {
         if (state.cart.length < 20) {
-          state.cart.push({ ...item, quantity: 1 })
+          state.cart.push({ ...item, quantity: 1, addedAt: Date.now() })
         } else {
           state.error = 'Cart is full'
         }
@@ -57,10 +64,31 @@ const ordersSlice = createSlice({
     },
     clearCart: (state) => {
       state.cart = []
+      state.deliveryNotes = ''
+      state.discountCode = ''
+      state.appliedDiscount = null
       state.error = null
     },
+    setDeliveryLocation: (state, action) => {
+      state.deliveryLocation = action.payload
+    },
+    setDeliveryNotes: (state, action) => {
+      state.deliveryNotes = action.payload.substring(0, 200) // Max 200 chars
+    },
+    setPaymentMethod: (state, action) => {
+      const validMethods = ['cash', 'card', 'mobile']
+      if (validMethods.includes(action.payload)) {
+        state.paymentMethod = action.payload
+      }
+    },
+    applyDiscountCode: (state, action) => {
+      state.discountCode = action.payload
+    },
+    setAppliedDiscount: (state, action) => {
+      state.appliedDiscount = action.payload
+    },
     placeOrder: (state, action) => {
-      const { items, shopId, shopName, total, userId } = action.payload
+      const { items, shopId, shopName, total, userId, deliveryLocation, deliveryFee, estimatedTime } = action.payload
       
       // Validate order
       if (!items || items.length === 0) {
@@ -79,15 +107,36 @@ const ordersSlice = createSlice({
         items: [...items],
         shopId,
         shopName,
-        total,
+        subtotal: total,
+        serviceFee: action.payload.serviceFee || 0,
+        deliveryFee: deliveryFee || 0,
+        discount: state.appliedDiscount?.amount || 0,
+        total: total + (action.payload.serviceFee || 0) + (deliveryFee || 0) - (state.appliedDiscount?.amount || 0),
         status: ORDER_STATUS.QUEUED,
+        deliveryLocation: deliveryLocation || state.deliveryLocation,
+        deliveryNotes: state.deliveryNotes,
+        paymentMethod: state.paymentMethod,
+        estimatedTime: estimatedTime || { min: 20, max: 30 },
         timestamp: new Date().toISOString(),
-        createdAt: Date.now()
+        createdAt: Date.now(),
+        statusHistory: [{
+          status: ORDER_STATUS.QUEUED,
+          timestamp: Date.now()
+        }]
       }
       
       state.studentOrders.push(order)
       state.allOrders.push(order)
+      state.orderHistory.push({
+        orderId: order.id,
+        shopName: order.shopName,
+        total: order.total,
+        date: order.timestamp
+      })
       state.cart = []
+      state.deliveryNotes = ''
+      state.discountCode = ''
+      state.appliedDiscount = null
       state.error = null
     },
     updateOrderStatus: (state, action) => {
@@ -114,6 +163,10 @@ const ordersSlice = createSlice({
         
         order.status = status
         order.updatedAt = Date.now()
+        order.statusHistory.push({
+          status,
+          timestamp: Date.now()
+        })
       }
       
       const studentOrder = state.studentOrders.find(o => o.id === id)
@@ -131,6 +184,11 @@ const ordersSlice = createSlice({
       if (order && order.userId === userId && order.status === ORDER_STATUS.QUEUED) {
         order.status = ORDER_STATUS.CANCELLED
         order.updatedAt = Date.now()
+        order.cancelledAt = Date.now()
+        order.statusHistory.push({
+          status: ORDER_STATUS.CANCELLED,
+          timestamp: Date.now()
+        })
         
         const studentOrder = state.studentOrders.find(o => o.id === id)
         if (studentOrder) {
@@ -139,6 +197,26 @@ const ordersSlice = createSlice({
         }
       } else {
         state.error = 'Cannot cancel this order'
+      }
+    },
+    addToFavorites: (state, action) => {
+      const item = action.payload
+      if (!state.favoriteItems.find(i => i.id === item.id)) {
+        state.favoriteItems.push(item)
+      }
+    },
+    removeFromFavorites: (state, action) => {
+      state.favoriteItems = state.favoriteItems.filter(i => i.id !== action.payload)
+    },
+    addOrderNote: (state, action) => {
+      const { orderId, note } = action.payload
+      const order = state.allOrders.find(o => o.id === orderId)
+      if (order) {
+        if (!order.notes) order.notes = []
+        order.notes.push({
+          text: note,
+          timestamp: Date.now()
+        })
       }
     },
     clearError: (state) => {
@@ -152,9 +230,17 @@ export const {
   removeFromCart, 
   updateCartQuantity,
   clearCart, 
+  setDeliveryLocation,
+  setDeliveryNotes,
+  setPaymentMethod,
+  applyDiscountCode,
+  setAppliedDiscount,
   placeOrder, 
   updateOrderStatus,
   cancelOrder,
+  addToFavorites,
+  removeFromFavorites,
+  addOrderNote,
   clearError
 } = ordersSlice.actions
 export default ordersSlice.reducer

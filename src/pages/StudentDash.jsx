@@ -1,9 +1,12 @@
 import { useState, useEffect } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { logout } from '../store/appSlice'
-import { addToCart, updateCartQuantity, placeOrder } from '../store/ordersSlice'
+import { addToCart, updateCartQuantity, placeOrder, cancelOrder, addToFavorites, removeFromFavorites } from '../store/ordersSlice'
 import { incrementOrderCount } from '../store/shopsSlice'
+import { validateOrderMinimum, estimatePreparationTime } from '../utils/businessLogic'
 import BottomNav from '../components/BottomNav'
+import DeliveryForm from '../components/DeliveryForm'
+import DiscountCode from '../components/DiscountCode'
 
 function StudentDash() {
   const dispatch = useDispatch()
@@ -12,11 +15,13 @@ function StudentDash() {
   const shops = useSelector(state => state.shops.shops)
   const cart = useSelector(state => state.orders.cart)
   const studentOrders = useSelector(state => state.orders.studentOrders)
+  const { deliveryLocation, appliedDiscount, favoriteItems } = useSelector(state => state.orders)
   
   const [view, setView] = useState('shops')
   const [selectedShop, setSelectedShop] = useState(null)
   const [cutoffTime] = useState('12:30')
   const [timeLeft, setTimeLeft] = useState(null)
+  const [showDeliveryForm, setShowDeliveryForm] = useState(false)
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -29,9 +34,16 @@ function StudentDash() {
       if (diff <= 0) {
         setTimeLeft('Closed')
       } else {
-        const mins = Math.floor(diff / 60000)
+        const totalMinutes = Math.floor(diff / 60000)
+        const hours = Math.floor(totalMinutes / 60)
+        const mins = totalMinutes % 60
         const secs = Math.floor((diff % 60000) / 1000)
-        setTimeLeft(`${mins}:${secs.toString().padStart(2, '0')}`)
+        
+        if (hours > 0) {
+          setTimeLeft(`${hours}h ${mins}m ${secs}s`)
+        } else {
+          setTimeLeft(`${mins}m ${secs}s`)
+        }
       }
     }, 1000)
     return () => clearInterval(timer)
@@ -47,30 +59,72 @@ function StudentDash() {
     
     const shop = shops.find(s => s.id === selectedShop)
     
-    // Check if shop is open
     if (shop.status !== 'open') {
       alert('This shop is currently closed!')
       return
     }
     
-    // Check if shop is at capacity
     if (shop.currentOrders >= shop.maxOrders) {
       alert('This shop is at full capacity!')
       return
     }
+
+    // Check delivery location
+    if (!deliveryLocation || !deliveryLocation.building) {
+      alert('Please provide delivery location!')
+      setShowDeliveryForm(true)
+      return
+    }
     
-    const total = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0)
+    const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0)
+    
+    // Validate minimum order
+    const minValidation = validateOrderMinimum(selectedShop, subtotal)
+    if (!minValidation.isValid) {
+      alert(`Minimum order is ${minValidation.minimum} MAD. Add ${minValidation.remaining} MAD more.`)
+      return
+    }
+
+    // Calculate delivery fee (simplified - 5 MAD flat rate)
+    const deliveryFee = 5
+    
+    // Calculate estimated time
+    const estimatedTime = estimatePreparationTime(cart)
     
     dispatch(placeOrder({
       items: cart,
       shopId: selectedShop,
       shopName: shop.name,
-      total: total + shop.serviceFee,
-      userId: user
+      total: subtotal,
+      serviceFee: shop.serviceFee,
+      deliveryFee,
+      estimatedTime,
+      userId: user,
+      deliveryLocation
     }))
     dispatch(incrementOrderCount(selectedShop))
     setSelectedShop(null)
+    setShowDeliveryForm(false)
     setView('orders')
+  }
+
+  const handleCancelOrder = (orderId) => {
+    if (window.confirm('Are you sure you want to cancel this order?')) {
+      dispatch(cancelOrder({ id: orderId, userId: user }))
+    }
+  }
+
+  const handleToggleFavorite = (item) => {
+    const isFavorite = favoriteItems.some(f => f.id === item.id)
+    if (isFavorite) {
+      dispatch(removeFromFavorites(item.id))
+    } else {
+      dispatch(addToFavorites(item))
+    }
+  }
+
+  const isFavorite = (itemId) => {
+    return favoriteItems.some(f => f.id === itemId)
   }
 
   const cartTotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0)
@@ -151,13 +205,22 @@ function StudentDash() {
                     {item.description && <p className="item-description">{item.description}</p>}
                     <p className="price">{item.price}</p>
                   </div>
-                  <button 
-                    className="add-btn"
-                    onClick={() => dispatch(addToCart(item))}
-                    disabled={!orderingEnabled}
-                  >
-                    +
-                  </button>
+                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                    <button 
+                      className={`favorite-btn ${isFavorite(item.id) ? 'active' : ''}`}
+                      onClick={() => handleToggleFavorite(item)}
+                      title={isFavorite(item.id) ? 'Remove from favorites' : 'Add to favorites'}
+                    >
+                      {isFavorite(item.id) ? '♥' : '♡'}
+                    </button>
+                    <button 
+                      className="add-btn"
+                      onClick={() => dispatch(addToCart(item))}
+                      disabled={!orderingEnabled}
+                    >
+                      +
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
@@ -169,7 +232,23 @@ function StudentDash() {
         <div className="view-content">
           <h2>Your Cart</h2>
           {cart.length === 0 ? (
-            <p className="empty-state">Cart is empty</p>
+            <>
+              <p className="empty-state">Cart is empty</p>
+              {favoriteItems.length > 0 && (
+                <div className="favorites-section">
+                  <h3>Your Favorites</h3>
+                  <div className="favorites-grid">
+                    {favoriteItems.map(item => (
+                      <div key={item.id} className="favorite-item" onClick={() => dispatch(addToCart(item))}>
+                        {item.image && <img src={item.image} alt={item.name} />}
+                        <h4>{item.name}</h4>
+                        <p className="price">{item.price}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
           ) : (
             <>
               <div className="cart-items">
@@ -191,6 +270,32 @@ function StudentDash() {
                   </div>
                 ))}
               </div>
+
+              {selectedShop && (() => {
+                const subtotal = cartTotal
+                const minValidation = validateOrderMinimum(selectedShop, subtotal)
+                
+                return !minValidation.isValid && (
+                  <div className="minimum-order-warning">
+                    Add {minValidation.remaining} MAD more to reach minimum order of {minValidation.minimum} MAD
+                  </div>
+                )
+              })()}
+
+              <DiscountCode orderTotal={cartTotal} />
+
+              {!showDeliveryForm && (
+                <button 
+                  className="view-menu-btn"
+                  onClick={() => setShowDeliveryForm(true)}
+                  style={{ marginBottom: '1rem' }}
+                >
+                  {deliveryLocation?.building ? 'Edit Delivery Details' : 'Add Delivery Details'}
+                </button>
+              )}
+
+              {showDeliveryForm && <DeliveryForm />}
+
               <div className="cart-summary">
                 <div className="summary-row">
                   <span>Subtotal</span>
@@ -200,17 +305,27 @@ function StudentDash() {
                   <span>Service fee</span>
                   <span>{serviceFee}</span>
                 </div>
+                <div className="summary-row">
+                  <span>Delivery fee</span>
+                  <span>5</span>
+                </div>
+                {appliedDiscount?.valid && (
+                  <div className="summary-row" style={{ color: 'var(--forest-green)' }}>
+                    <span>Discount</span>
+                    <span>-{appliedDiscount.amount}</span>
+                  </div>
+                )}
                 <div className="summary-row total">
                   <span>Total</span>
-                  <span>{cartTotal + serviceFee}</span>
+                  <span>{cartTotal + serviceFee + 5 - (appliedDiscount?.amount || 0)}</span>
                 </div>
               </div>
               <button 
                 className="place-order-btn"
                 onClick={handlePlaceOrder}
-                disabled={!orderingEnabled}
+                disabled={!orderingEnabled || !deliveryLocation?.building}
               >
-                {!orderingEnabled ? 'Ordering Closed' : 'Place Order'}
+                {!orderingEnabled ? 'Ordering Closed' : !deliveryLocation?.building ? 'Add Delivery Details' : 'Place Order'}
               </button>
             </>
           )}
@@ -224,17 +339,20 @@ function StudentDash() {
             <p className="empty-state">No orders yet</p>
           ) : (
             <div className="orders-list">
-              {studentOrders.map(order => (
+              {studentOrders.slice().reverse().map(order => (
                 <div key={order.id} className="order-card">
                   <div className="order-header">
                     <h4>{order.shopName}</h4>
-                    <span className={`status-badge ${order.status.toLowerCase()}`}>
+                    <span className={`status-badge ${order.status.toLowerCase().replace(' ', '-')}`}>
                       {order.status}
                     </span>
                   </div>
                   <div className="order-progress">
-                    <div className={`step ${['Queued', 'Picked Up', 'Delivered'].includes(order.status) ? 'done' : ''}`}>
+                    <div className={`step ${['Queued', 'Ready', 'Picked Up', 'Delivered'].includes(order.status) ? 'done' : ''}`}>
                       <span>Queued</span>
+                    </div>
+                    <div className={`step ${['Ready', 'Picked Up', 'Delivered'].includes(order.status) ? 'done' : ''}`}>
+                      <span>Ready</span>
                     </div>
                     <div className={`step ${['Picked Up', 'Delivered'].includes(order.status) ? 'done' : ''}`}>
                       <span>Picked Up</span>
@@ -243,7 +361,77 @@ function StudentDash() {
                       <span>Delivered</span>
                     </div>
                   </div>
-                  <p className="order-total">Total: {order.total} MAD</p>
+                  <div className="order-items">
+                    {order.items.map((item, idx) => (
+                      <p key={idx}>{item.quantity}x {item.name}</p>
+                    ))}
+                  </div>
+                  
+                  {order.deliveryLocation && (
+                    <div className="order-location">
+                      <strong>Delivery to:</strong>
+                      {order.deliveryLocation.building && <p>{order.deliveryLocation.building}</p>}
+                      {(order.deliveryLocation.floor || order.deliveryLocation.room) && (
+                        <p>Floor {order.deliveryLocation.floor}, Room {order.deliveryLocation.room}</p>
+                      )}
+                      {order.deliveryLocation.landmark && <p>{order.deliveryLocation.landmark}</p>}
+                    </div>
+                  )}
+
+                  {order.deliveryNotes && (
+                    <div className="order-notes">
+                      Note: {order.deliveryNotes}
+                    </div>
+                  )}
+
+                  {order.estimatedTime && order.status === 'Queued' && (
+                    <div className="estimated-time">
+                      Estimated: {order.estimatedTime.min}-{order.estimatedTime.max} minutes
+                    </div>
+                  )}
+
+                  <div className="order-details">
+                    <div className="order-details-row">
+                      <span>Subtotal</span>
+                      <span>{order.subtotal} MAD</span>
+                    </div>
+                    {order.serviceFee > 0 && (
+                      <div className="order-details-row">
+                        <span>Service Fee</span>
+                        <span>{order.serviceFee} MAD</span>
+                      </div>
+                    )}
+                    {order.deliveryFee > 0 && (
+                      <div className="order-details-row">
+                        <span>Delivery Fee</span>
+                        <span>{order.deliveryFee} MAD</span>
+                      </div>
+                    )}
+                    {order.discount > 0 && (
+                      <div className="order-details-row" style={{ color: 'var(--forest-green)' }}>
+                        <span>Discount</span>
+                        <span>-{order.discount} MAD</span>
+                      </div>
+                    )}
+                    <div className="order-details-row highlight">
+                      <span>Total</span>
+                      <span>{order.total} MAD</span>
+                    </div>
+                    {order.paymentMethod && (
+                      <div className="payment-badge">
+                        Payment: {order.paymentMethod === 'cash' ? 'Cash on Delivery' : order.paymentMethod === 'card' ? 'Card' : 'Mobile Payment'}
+                      </div>
+                    )}
+                  </div>
+
+                  {order.status === 'Queued' && (
+                    <button 
+                      className="cancel-order-btn"
+                      onClick={() => handleCancelOrder(order.id)}
+                    >
+                      Cancel Order
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
